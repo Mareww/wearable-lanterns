@@ -1,0 +1,11 @@
+{
+    "required": true,
+    "package": "com.wearablelanterns.mixin",
+    "compatibilityLevel": "JAVA_17",
+    "mixins": [
+        "PlayerDisconnectMixin"
+    ],
+    "injectors": {
+        "defaultRequire": 1
+    }
+}

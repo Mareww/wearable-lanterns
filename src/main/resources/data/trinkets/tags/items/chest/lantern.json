@@ -1,0 +1,19 @@
+{
+    "replace": false,
+    "values": [
+        "minecraft:lantern",
+        "minecraft:soul_lantern",
+        {"id": "supplementaries:copper_lantern", "required": false},
+        {"id": "supplementaries:brass_lantern", "required": false},
+        {"id": "supplementaries:silver_lantern", "required": false},
+        {"id": "supplementaries:crimson_lantern", "required": false},
+        {"id": "supplementaries:warped_lantern", "required": false},
+        {"id": "decorative_blocks:soul_chandelier", "required": false},
+        {"id": "decorative_blocks:chandelier", "required": false},
+        {"id": "create:copper_soul_lantern", "required": false},
+        {"id": "create:copper_lantern", "required": false},
+        {"id": "architects_palette:nether_brass_lantern", "required": false},
+        {"id": "byg:cryptic_lantern", "required": false},
+        {"id": "byg:therium_lantern", "required": false}
+    ]
+}

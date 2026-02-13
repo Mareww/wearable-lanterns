@@ -1,0 +1,28 @@
+{
+    "schemaVersion": 1,
+    "id": "wearablelanterns",
+    "version": "${version}",
+    "name": "Wearable Lanterns",
+    "description": "Wear lanterns and soul lanterns as trinkets on your hip!",
+    "authors": ["Marew"],
+    "contact": {},
+    "license": "MIT",
+    "icon": "",
+    "environment": "*",
+    "entrypoints": {
+        "main": ["com.wearablelanterns.WearableLanterns"],
+        "client": ["com.wearablelanterns.WearableLanternsClient"],
+        "modmenu": ["com.wearablelanterns.client.ModMenuIntegration"]
+    },
+    "mixins": ["wearablelanterns.mixins.json"],
+    "depends": {
+        "fabricloader": ">=0.14.0",
+        "minecraft": "~1.20.1",
+        "java": ">=17",
+        "fabric-api": "*",
+        "trinkets": "*"
+    },
+    "suggests": {
+        "modmenu": "*"
+    }
+}
