@@ -4,6 +4,7 @@ import com.wearablelanterns.trinket.LanternTrinket;
 import dev.emi.trinkets.api.TrinketsApi;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.util.TriState;
 import net.minecraft.item.Item;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.Identifier;
@@ -19,10 +20,21 @@ public class WearableLanterns implements ModInitializer {
     public void onInitialize() {
         LanternConfig.load();
 
+        // Register a custom trinket predicate that accepts any item with "lantern" in its ID
+        // This is referenced in slot data files so ANY modded lantern can go in the slots
+        TrinketsApi.registerTrinketPredicate(new Identifier(MOD_ID, "is_lantern"), (stack, ref, entity) -> {
+            Identifier id = Registries.ITEM.getId(stack.getItem());
+            if (id.getPath().toLowerCase().contains("lantern")) {
+                return TriState.TRUE;
+            }
+            return TriState.DEFAULT;
+        });
+
         // Register all items containing "lantern" in their ID
         registerAllLanterns();
 
-        DynamicLightHandler.register();
+        // Re-scan when server starts to catch modded lanterns that registered after us
+        ServerLifecycleEvents.SERVER_STARTING.register(server -> registerAllLanterns());
 
         LOGGER.info("Wearable Lanterns loaded!");
     }

@@ -25,15 +25,18 @@ public class LanternConfig {
     // Head has no variants - lantern always sits on top
 
     // --- Render Positions ---
-    // x: left/right (positive = left), y: up/down (positive = down from pivot), z: front/back (positive = front)
+    // Hip positions are relative to the body pivot (neck area)
+    // Shoulder positions are relative to the arm pivot (shoulder joint) - moves with arm
+    // Head positions are relative to the head pivot (neck)
+    // x: left/right, y: up/down (positive = down from pivot), z: front/back (positive = front)
     // baseTilt: side lean in degrees, outwardAngle: Y rotation in degrees
     // dropDistance: how far the lantern hangs below the pivot point
     // enablePhysics: whether the lantern sways with movement
 
-    public SlotPosition left_hip = new SlotPosition(0.25f, 0.62f, 0.12f, 0.32f, -10f, 25f, 0.18f, true);
-    public SlotPosition right_hip = new SlotPosition(-0.25f, 0.62f, 0.12f, 0.32f, 10f, -25f, 0.18f, true);
-    public SlotPosition right_shoulder = new SlotPosition(-0.5f, 0.05f, 0.0f, 0.30f, 8f, -20f, 0.12f, true);
-    public SlotPosition left_shoulder = new SlotPosition(0.5f, 0.05f, 0.0f, 0.30f, -8f, 20f, 0.12f, true);
+    public SlotPosition left_hip = new SlotPosition(0.225f, 0.62f, 0.12f, 0.32f, -14f, 25f, 0.18f, true);
+    public SlotPosition right_hip = new SlotPosition(-0.225f, 0.62f, 0.12f, 0.32f, 14f, -25f, 0.18f, true);
+    public SlotPosition right_shoulder = new SlotPosition(-0.12f, 0.0f, 0.0f, 0.30f, 35f, -15f, 0.12f, true);
+    public SlotPosition left_shoulder = new SlotPosition(0.12f, 0.0f, 0.0f, 0.30f, -35f, 15f, 0.12f, true);
     public SlotPosition head = new SlotPosition(0.0f, -0.75f, 0.0f, 0.45f, 0f, 0f, 0f, false);
 
     public static class SlotPosition {

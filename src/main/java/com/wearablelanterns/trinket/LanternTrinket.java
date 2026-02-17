@@ -5,12 +5,19 @@ import dev.emi.trinkets.api.Trinket;
 import dev.emi.trinkets.api.TrinketEnums.DropRule;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.registry.Registries;
+import net.minecraft.util.Identifier;
 
 public class LanternTrinket implements Trinket {
 
     @Override
+    public boolean canEquip(ItemStack stack, SlotReference slot, LivingEntity entity) {
+        Identifier id = Registries.ITEM.getId(stack.getItem());
+        return id.getPath().toLowerCase().contains("lantern");
+    }
+
+    @Override
     public void tick(ItemStack stack, SlotReference slot, LivingEntity entity) {
-        // No special effects - just a wearable light source
     }
 
     @Override

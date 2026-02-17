@@ -25,7 +25,6 @@ import java.util.Map;
 
 public class LanternTrinketRenderer implements TrinketRenderer {
 
-    // Per-entity, per-slot physics state to avoid cross-contamination
     private static final Map<String, PhysicsState> physicsStates = new HashMap<>();
 
     private static class PhysicsState {
@@ -34,6 +33,8 @@ public class LanternTrinketRenderer implements TrinketRenderer {
         float forwardTilt = 0f;
         float forwardVelocity = 0f;
         double prevY = 0;
+        // Shoulder-specific: track arm pitch for angular velocity
+        float prevArmPitch = 0f;
     }
 
     private static PhysicsState getPhysics(int entityId, String group) {
@@ -76,7 +77,8 @@ public class LanternTrinketRenderer implements TrinketRenderer {
             case "chest" -> renderOnBody(
                     stack, playerModel, matrices, vertexConsumers, entity,
                     limbAngle, limbDistance, config.getChestPosition(),
-                    config.isShoulderMirrored(), false, playerModel.body, "chest"
+                    config.isShoulderMirrored(), false,
+                    config.isShoulderMirrored() ? playerModel.leftArm : playerModel.rightArm, "chest"
             );
             case "head" -> renderOnHead(
                     stack, playerModel, matrices, vertexConsumers, entity,
@@ -101,48 +103,61 @@ public class LanternTrinketRenderer implements TrinketRenderer {
     ) {
         PhysicsState physics = getPhysics(entity.getId(), group);
 
+        // Capture arm pitch before physics (for shoulder pendulum)
+        float armPitch = isHip ? 0f : attachPart.pitch;
+
         // Vertical movement detection
         double currentY = entity.getY();
         float verticalSpeed = (float) (currentY - physics.prevY);
         physics.prevY = currentY;
 
         if (pos.enablePhysics) {
-            // Leg swing angle for collision detection (hip only)
-            float legSwing = MathHelper.sin(limbAngle * 0.6662f) * limbDistance * 1.4f;
-            // Use the correct leg based on which side the lantern is on
-            float legAngle = mirrored ? (legSwing * 40f) : (-legSwing * 40f);
-
-            // Pendulum physics - reduced force for shoulder variants
-            float moveFactor = MathHelper.clamp(limbDistance, 0f, 1f);
-            float walkForce = MathHelper.sin(limbAngle * 0.5f) * moveFactor * (isHip ? 0.5f : 0.3f);
-
-            physics.swingVelocity += walkForce;
-            physics.swingVelocity -= physics.swingAngle * 0.06f;
-            physics.swingVelocity *= 0.88f;
-            physics.swingAngle += physics.swingVelocity;
-
-            // Leg collision (hip variants only)
             if (isHip) {
-                float collisionThreshold = 3f - legAngle * 0.3f;
+                // === HIP PENDULUM: driven by walk animation, swings side-to-side ===
+                float legSwing = MathHelper.sin(limbAngle * 0.6662f) * limbDistance * 1.4f;
+                float legAngle = mirrored ? (legSwing * 40f) : (-legSwing * 40f);
 
+                float moveFactor = MathHelper.clamp(limbDistance, 0f, 1f);
+                float walkForce = MathHelper.sin(limbAngle * 0.5f) * moveFactor * 0.5f;
+
+                physics.swingVelocity += walkForce;
+                physics.swingVelocity -= physics.swingAngle * 0.06f;
+                physics.swingVelocity *= 0.88f;
+                physics.swingAngle += physics.swingVelocity;
+
+                // Leg collision
+                float collisionThreshold = 3f - legAngle * 0.3f;
                 if (mirrored) {
-                    // Right hip - collision from the opposite direction
                     if (physics.swingAngle < -collisionThreshold) {
                         physics.swingAngle = -collisionThreshold;
                         physics.swingVelocity = Math.abs(physics.swingVelocity) * 0.5f + Math.abs(legAngle) * 0.02f;
                     }
                 } else {
-                    // Left hip - original collision behavior
                     if (physics.swingAngle > collisionThreshold) {
                         physics.swingAngle = collisionThreshold;
                         physics.swingVelocity = -Math.abs(physics.swingVelocity) * 0.5f - Math.abs(legAngle) * 0.02f;
                     }
                 }
+                physics.swingAngle = MathHelper.clamp(physics.swingAngle, -15f, 15f);
+            } else {
+                // === SHOULDER PENDULUM: driven by arm angular velocity ===
+                // The lantern hangs from the shoulder as a pendulum fulcrum.
+                // Arm pitch changes create inertial forces - the lantern resists
+                // sudden direction changes and lags behind the arm movement.
+                float armAngularVelocity = armPitch - physics.prevArmPitch;
+                physics.prevArmPitch = armPitch;
+
+                // Inertia: arm acceleration drives the pendulum in the opposite direction
+                physics.swingVelocity += -armAngularVelocity * 5f;
+                // Gravity restoring force pulls lantern back to vertical
+                physics.swingVelocity -= physics.swingAngle * 0.10f;
+                // Damping from air resistance and flexible connection
+                physics.swingVelocity *= 0.88f;
+                physics.swingAngle += physics.swingVelocity;
+                physics.swingAngle = MathHelper.clamp(physics.swingAngle, -20f, 20f);
             }
 
-            physics.swingAngle = MathHelper.clamp(physics.swingAngle, -15f, 15f);
-
-            // Forward/back tilt from vertical movement
+            // Forward/back tilt from vertical movement (jumping/falling) - both slots
             float verticalForce = -verticalSpeed * 15f;
             physics.forwardVelocity += verticalForce;
             physics.forwardVelocity -= physics.forwardTilt * 0.1f;
@@ -153,20 +168,38 @@ public class LanternTrinketRenderer implements TrinketRenderer {
 
         matrices.push();
 
-        // Attach to body
+        // Attach to body/arm pivot
         attachPart.rotate(matrices);
 
-        // Position from config
-        matrices.translate(pos.x, pos.y, pos.z);
+        // Shoulder: counter-rotate the arm's pitch so the lantern hangs vertically
+        // instead of rotating rigidly with the arm. The pendulum physics will add
+        // its own swing angle driven by the arm's movement.
+        if (!isHip) {
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation(-armPitch));
+        }
 
-        // Side swing (base tilt + dynamic physics)
-        float totalTilt = pos.baseTilt + (pos.enablePhysics ? physics.swingAngle : 0f);
-        matrices.multiply(RotationAxis.POSITIVE_Z.rotation((float) Math.toRadians(totalTilt)));
+        if (isHip) {
+            // Position from config
+            matrices.translate(pos.x, pos.y, pos.z);
 
-        // Forward/back tilt (slight base lean for hip, none for shoulder)
-        float forwardBase = isHip ? 5f : 0f;
-        float totalForward = forwardBase + (pos.enablePhysics ? physics.swingAngle * 0.3f + physics.forwardTilt : 0f);
-        matrices.multiply(RotationAxis.POSITIVE_X.rotation((float) Math.toRadians(totalForward)));
+            // Hip: swing on Z axis (side-to-side tilt)
+            float totalTilt = pos.baseTilt + (pos.enablePhysics ? physics.swingAngle : 0f);
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotation((float) Math.toRadians(totalTilt)));
+
+            // Hip: forward lean + physics
+            float totalForward = 5f + (pos.enablePhysics ? physics.swingAngle * 0.3f + physics.forwardTilt : 0f);
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation((float) Math.toRadians(totalForward)));
+        } else {
+            // Shoulder: tilt first at the pivot, then offset position
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotation((float) Math.toRadians(pos.baseTilt)));
+
+            // Shoulder: pendulum swing on X axis (forward/backward, same plane as arm)
+            float totalSwing = pos.enablePhysics ? physics.swingAngle + physics.forwardTilt : 0f;
+            matrices.multiply(RotationAxis.POSITIVE_X.rotation((float) Math.toRadians(totalSwing)));
+
+            // Position from config (after tilt so it hangs from the tilted pivot)
+            matrices.translate(pos.x, pos.y, pos.z);
+        }
 
         // Drop down from pivot point
         matrices.translate(0.0f, pos.dropDistance, 0.0f);

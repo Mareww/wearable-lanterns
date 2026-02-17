@@ -24,6 +24,10 @@ import java.util.UUID;
 public class DynamicLightHandler {
 
     private static final Map<UUID, BlockPos> lastLightPositions = new HashMap<>();
+    // When onUnequip fires, suppress light placement for several ticks
+    // This prevents the tick handler from re-placing light before the trinket state fully updates
+    private static final Map<UUID, Integer> suppressionTicks = new HashMap<>();
+    private static final int SUPPRESS_DURATION = 5;
 
     public static void register() {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
@@ -36,10 +40,26 @@ public class DynamicLightHandler {
     private static void handlePlayer(ServerPlayerEntity player) {
         ServerWorld world = player.getServerWorld();
         UUID uuid = player.getUuid();
+        BlockPos currentPos = player.getBlockPos();
+
+        // Check if light is suppressed (recently unequipped)
+        Integer suppress = suppressionTicks.get(uuid);
+        if (suppress != null) {
+            // Actively scrub any light blocks near the player
+            cleanAllNearby(world, currentPos);
+            BlockPos lastPos = lastLightPositions.remove(uuid);
+            if (lastPos != null) {
+                removeLightIfOurs(world, lastPos);
+            }
+            if (suppress <= 1) {
+                suppressionTicks.remove(uuid);
+            } else {
+                suppressionTicks.put(uuid, suppress - 1);
+            }
+            return;
+        }
 
         boolean hasLantern = isWearingLantern(player);
-
-        BlockPos currentPos = player.getBlockPos();
         BlockPos lastPos = lastLightPositions.get(uuid);
 
         if (hasLantern) {
@@ -69,10 +89,21 @@ public class DynamicLightHandler {
                 }
             }
         } else {
-            // No lantern equipped - clean up any existing light
+            // No lantern equipped - clean up
             if (lastPos != null) {
                 removeLightIfOurs(world, lastPos);
                 lastLightPositions.remove(uuid);
+            }
+        }
+    }
+
+    private static void cleanAllNearby(ServerWorld world, BlockPos center) {
+        // Scrub light blocks at and around the player position
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    removeLightIfOurs(world, center.add(dx, dy, dz));
+                }
             }
         }
     }
@@ -83,7 +114,6 @@ public class DynamicLightHandler {
             return false;
         }
 
-        // Check all equipped trinkets for any lantern
         List<Pair<dev.emi.trinkets.api.SlotReference, ItemStack>> equipped = component.get().getAllEquipped();
         for (Pair<dev.emi.trinkets.api.SlotReference, ItemStack> pair : equipped) {
             ItemStack stack = pair.getRight();
@@ -105,9 +135,15 @@ public class DynamicLightHandler {
     }
 
     public static void removePlayerLight(ServerPlayerEntity player) {
-        BlockPos lastPos = lastLightPositions.remove(player.getUuid());
+        UUID uuid = player.getUuid();
+        // Suppress light placement for several ticks
+        suppressionTicks.put(uuid, SUPPRESS_DURATION);
+        // Immediately clean up
+        BlockPos lastPos = lastLightPositions.remove(uuid);
+        ServerWorld world = player.getServerWorld();
         if (lastPos != null) {
-            removeLightIfOurs(player.getServerWorld(), lastPos);
+            removeLightIfOurs(world, lastPos);
         }
+        cleanAllNearby(world, player.getBlockPos());
     }
 }

@@ -1,5 +1,6 @@
 {
     "order": 0,
     "amount": 1,
-    "icon": "wearablelanterns:gui/slots/lantern"
+    "icon": "wearablelanterns:gui/slots/lantern",
+    "validator_predicates": ["wearablelanterns:is_lantern"]
 }
