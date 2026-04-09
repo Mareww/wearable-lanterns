@@ -7,7 +7,7 @@
     "authors": ["Marew"],
     "contact": {},
     "license": "MIT",
-    "icon": "icon.png",
+    "icon": "assets/wearablelanterns/icon.png",
     "environment": "*",
     "entrypoints": {
         "main": ["com.wearablelanterns.WearableLanterns"],
