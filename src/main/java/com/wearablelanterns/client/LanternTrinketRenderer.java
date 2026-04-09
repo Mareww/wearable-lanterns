@@ -31,8 +31,7 @@ public class LanternTrinketRenderer implements TrinketRenderer {
         float swingAngle = 0f;
         float swingVelocity = 0f;
         float forwardTilt = 0f;
-        float forwardVelocity = 0f;
-        double prevY = 0;
+        float fallTilt = 0f;
         // Shoulder-specific: track arm pitch for angular velocity
         float prevArmPitch = 0f;
     }
@@ -106,11 +105,6 @@ public class LanternTrinketRenderer implements TrinketRenderer {
         // Capture arm pitch before physics (for shoulder pendulum)
         float armPitch = isHip ? 0f : attachPart.pitch;
 
-        // Vertical movement detection
-        double currentY = entity.getY();
-        float verticalSpeed = (float) (currentY - physics.prevY);
-        physics.prevY = currentY;
-
         if (pos.enablePhysics) {
             if (isHip) {
                 // === HIP PENDULUM: driven by walk animation, swings side-to-side ===
@@ -157,13 +151,20 @@ public class LanternTrinketRenderer implements TrinketRenderer {
                 physics.swingAngle = MathHelper.clamp(physics.swingAngle, -20f, 20f);
             }
 
-            // Forward/back tilt from vertical movement (jumping/falling) - both slots
-            float verticalForce = -verticalSpeed * 15f;
-            physics.forwardVelocity += verticalForce;
-            physics.forwardVelocity -= physics.forwardTilt * 0.1f;
-            physics.forwardVelocity *= 0.85f;
-            physics.forwardTilt += physics.forwardVelocity;
-            physics.forwardTilt = MathHelper.clamp(physics.forwardTilt, -25f, 25f);
+            // Forward/back tilt from vertical movement - stable per-tick velocity, no per-frame noise
+            float targetForwardTilt = MathHelper.clamp((float)(-entity.getVelocity().y) * 10f, -25f, 25f);
+            physics.forwardTilt += (targetForwardTilt - physics.forwardTilt) * 0.08f;
+
+            // Outward tilt when falling - lerp to a target angle, no velocity term so no oscillation
+            double velY = entity.getVelocity().y;
+            boolean isFalling = !entity.isOnGround() && velY < -0.45;
+            float targetFallTilt = 0f;
+            if (isFalling) {
+                float magnitude = MathHelper.clamp((float)(-velY) * 10f, 0f, 22f);
+                targetFallTilt = mirrored ? magnitude : -magnitude;
+            }
+            // Slower return to neutral so edge-of-threshold jitter doesn't snap back visibly
+            physics.fallTilt += (targetFallTilt - physics.fallTilt) * (isFalling ? 0.08f : 0.03f);
         }
 
         matrices.push();
@@ -182,16 +183,22 @@ public class LanternTrinketRenderer implements TrinketRenderer {
             // Position from config
             matrices.translate(pos.x, pos.y, pos.z);
 
-            // Hip: swing on Z axis (side-to-side tilt)
-            float totalTilt = pos.baseTilt + (pos.enablePhysics ? physics.swingAngle : 0f);
+            // Fade out swing contribution as fall tilt grows so spring noise doesn't pollute the fall effect
+            float fallFraction = MathHelper.clamp(Math.abs(physics.fallTilt) / 8f, 0f, 1f);
+            float swingContrib = pos.enablePhysics ? physics.swingAngle * (1f - fallFraction) : 0f;
+
+            // Hip: swing on Z axis (side-to-side tilt + outward fall tilt)
+            float totalTilt = pos.baseTilt + swingContrib + (pos.enablePhysics ? physics.fallTilt : 0f);
             matrices.multiply(RotationAxis.POSITIVE_Z.rotation((float) Math.toRadians(totalTilt)));
 
             // Hip: forward lean + physics
-            float totalForward = 5f + (pos.enablePhysics ? physics.swingAngle * 0.3f + physics.forwardTilt : 0f);
+            float totalForward = 5f + (pos.enablePhysics ? physics.swingAngle * 0.3f * (1f - fallFraction) + physics.forwardTilt : 0f);
             matrices.multiply(RotationAxis.POSITIVE_X.rotation((float) Math.toRadians(totalForward)));
         } else {
-            // Shoulder: tilt first at the pivot, then offset position
-            matrices.multiply(RotationAxis.POSITIVE_Z.rotation((float) Math.toRadians(pos.baseTilt)));
+            // Shoulder: tilt first at the pivot, then offset position (+ outward fall tilt)
+            // Sign is negated vs hip because shoulder baseTilt uses opposite convention (+right, -left)
+            float shoulderZTilt = pos.baseTilt + (pos.enablePhysics ? -physics.fallTilt : 0f);
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotation((float) Math.toRadians(shoulderZTilt)));
 
             // Shoulder: pendulum swing on X axis (forward/backward, same plane as arm)
             float totalSwing = pos.enablePhysics ? physics.swingAngle + physics.forwardTilt : 0f;

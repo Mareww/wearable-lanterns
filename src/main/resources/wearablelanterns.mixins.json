@@ -3,7 +3,8 @@
     "package": "com.wearablelanterns.mixin",
     "compatibilityLevel": "JAVA_17",
     "mixins": [
-        "PlayerDisconnectMixin"
+        "PlayerDisconnectMixin",
+        "TrinketSlotMaxCountMixin"
     ],
     "injectors": {
         "defaultRequire": 1
